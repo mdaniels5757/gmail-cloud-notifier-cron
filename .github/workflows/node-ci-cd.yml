@@ -29,7 +29,7 @@ jobs:
         with:
           path: .
           name: built
-  deploy_cronJob:
+  deploy_notify:
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -41,11 +41,11 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
-      - id: 'deploy_cronJob'
+      - id: 'deploy_notify'
         uses: 'google-github-actions/deploy-cloud-functions@v3'
         timeout-minutes: 10
         with:
-          name: cronJob
+          name: notify
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           runtime: 'nodejs22'
           environment_variables: |-
@@ -58,6 +58,46 @@ jobs:
             GOOGLE_CLIENT_SECRET=projects/437124374582/secrets/GOOGLE_CLIENT_SECRET
             PUSHOVER_USER_KEY=projects/437124374582/secrets/PUSHOVER_USER_KEY
             PUSHOVER_API_KEY=projects/437124374582/secrets/PUSHOVER_API_KEY
+          min_instance_count: 0
+          max_instance_count: 1
+          max_instance_request_concurrency: 1
           event_trigger_type: google.cloud.pubsub.topic.v1.messagePublished
           event_trigger_pubsub_topic: projects/${{ secrets.GCP_PROJECT_ID }}/topics/${{ secrets.TOPIC_ID }}
-          service_account: cronjob@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          event_trigger_retry: false
+          event_trigger_service_account: eventarctrigger@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          service_account: notify@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+  deploy_watch:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: built
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
+      - id: 'deploy_watch'
+        uses: 'google-github-actions/deploy-cloud-functions@v3'
+        timeout-minutes: 10
+        with:
+          name: watch
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          runtime: 'nodejs22'
+          environment_variables: |-
+            GCLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }}
+            DATASTORE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            TOPIC_ID=${{ secrets.TOPIC_ID }}
+            GCF_REGION=${{ secrets.GCF_REGION }}
+          secrets: |-
+            GOOGLE_CLIENT_ID=projects/437124374582/secrets/GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET=projects/437124374582/secrets/GOOGLE_CLIENT_SECRET
+          min_instance_count: 0
+          max_instance_count: 1
+          max_instance_request_concurrency: 1
+          event_trigger_type: google.cloud.pubsub.topic.v1.messagePublished
+          event_trigger_pubsub_topic: projects/${{ secrets.GCP_PROJECT_ID }}/topics/${{ secrets.TOPIC_ID }}
+          event_trigger_retry: false
+          event_trigger_service_account: eventarctrigger@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          service_account: watcher@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
